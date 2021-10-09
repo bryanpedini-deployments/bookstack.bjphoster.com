@@ -1,0 +1,61 @@
+version: "3"
+
+services:
+  app:
+    container_name: ${SERVICE_NAME}_bookstack
+    depends_on:
+      - db
+    environment:
+      - APP_URL="${BOOKSTACK_URL}"
+      - DB_DATABASE=${MYSQL_DATABASE}
+      - DB_HOST=db:3306
+      - DB_PASSWORD=${MYSQL_PASSWORD}
+      - DB_USERNAME=${MYSQL_USER}
+    image: ${BOOKSTACK_VERSION}
+    labels:
+      - traefik.docker.network=traefik-proxy
+      - traefik.enable=true
+      ### Section HTTP
+      - traefik.http.routers.http-${TRAEFIK_ROUTER}.entrypoints=http
+      - traefik.http.services.${TRAEFIK_SERVICE}.loadbalancer.server.port=8080
+      # redirect to HTTPS only
+      - traefik.http.routers.http-${TRAEFIK_ROUTER}.middlewares=http-to-https
+      - traefik.http.routers.http-${TRAEFIK_ROUTER}.rule=Host(`${TRAEFIK_HOST}`)
+      ### Section HTTPS
+      - traefik.http.routers.https-${TRAEFIK_ROUTER}.entrypoints=https
+      - traefik.https.services.${TRAEFIK_SERVICE}.loadbalancer.server.port=8080
+      # configure the exposed service
+      - traefik.http.routers.https-${TRAEFIK_ROUTER}.rule=Host(`${TRAEFIK_HOST}`)
+      # of course, enable TLS and it's certificate provider
+      - traefik.http.routers.https-${TRAEFIK_ROUTER}.tls=true
+      - traefik.http.routers.https-${TRAEFIK_ROUTER}.tls.certresolver=letsencrypt
+    networks:
+      - internal
+      - traefik-proxy
+    restart: unless-stopped
+    volumes:
+      - storage:/var/www/bookstack/storage/uploads
+      - uploads:/var/www/bookstack/public/uploads
+  db:
+    container_name: ${SERVICE_NAME}_mysql
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_RANDOM_ROOT_PASSWORD=yes
+      - MYSQL_USER=${MYSQL_USER}
+    image: ${MYSQL_VERSION}
+    networks:
+      - internal
+    restart: unless-stopped
+    volumes:
+      - database:/var/lib/mysql
+
+networks:
+  internal:
+  traefik-proxy:
+    external: true
+
+volumes:
+  database:
+  storage:
+  uploads:
